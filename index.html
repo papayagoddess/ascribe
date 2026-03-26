@@ -4,36 +4,163 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>äm: text editor</title>
+    
     <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#ffffff">
     <link rel="apple-touch-icon" href="icon.png">
+
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;900&family=Playfair+Display:ital@0;1&family=Dancing+Script:wght@500&display=swap" rel="stylesheet">
     
     <style>
-        :root { 
-            --bg: #ffffff; 
-            --text-dim: #d1d1d1; 
-            --accent: #222;
-            --line-height: 32px; 
-        }
+        :root { --bg: #ffffff; --text-dim: #d1d1d1; --accent: #222; --line-height: 32px; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        
-        html, body { 
-            margin: 0; padding: 0; height: 100%; width: 100%;
-            overflow: hidden; background: var(--bg); color: var(--accent); 
-            font-family: 'Montserrat', sans-serif; 
-        }
-        
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: var(--bg); color: var(--accent); font-family: 'Montserrat', sans-serif; }
         body { display: flex; flex-direction: column; }
-        
         header { padding: 35px 20px 5px 20px; text-align: center; flex-shrink: 0; }
         h1 { font-family: 'Playfair Display', serif; font-weight: 400; font-size: 1.1rem; letter-spacing: 5px; margin: 0; text-transform: lowercase; opacity: 0.8; }
-        
         .stats { font-size: 0.6rem; letter-spacing: 2px; color: var(--text-dim); text-transform: lowercase; margin-top: 8px; }
+        .controls { display: flex; justify-content: center; gap: 15px; padding: 10px; flex-shrink: 0; flex-wrap: wrap; }
+        .style-bar { display: flex; justify-content: center; gap: 35px; padding: 12px; border-top: 1px solid #fcfcfc; }
+        .action { background: none; border: none; font-family: 'Playfair Display', serif; font-style: italic; font-size: 0.8rem; color: var(--text-dim); cursor: pointer; text-transform: lowercase; transition: 0.2s; }
+        .action.active { color: var(--accent); opacity: 1; transform: scale(1.1); }
+        #fileInput { display: none; }
+        .bold-btn { font-weight: 900; font-style: normal; font-family: 'Montserrat', sans-serif; font-size: 0.9rem; }
+        .italic-btn { font-family: 'Playfair Display', serif; font-style: italic; font-size: 1.1rem; }
+        .cursive-btn { font-family: 'Dancing Script', cursive; font-size: 1.2rem; font-style: normal; text-transform: none; }
+        #äm-workspace { flex-grow: 1; width: 100%; max-width: 700px; margin: 0 auto; padding: 20px; outline: none; font-size: 20px; line-height: var(--line-height); overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding-bottom: 60vh; }
+        #äm-workspace:empty::before { content: "begin..."; color: #f5f5f5; }
+        footer { padding: 15px; text-align: center; font-size: 0.55rem; letter-spacing: 3px; color: #eeeeee; text-transform: lowercase; font-family: 'Playfair Display', serif; font-style: italic; }
+    </style>
+</head>
+<body>
 
-        .controls { 
-            display: flex; justify-content: center; gap: 15px; 
-            padding: 10px; flex-shrink: 0; flex-wrap: wrap;
+<header>
+    <h1>äm</h1>
+    <div class="stats"><span id="wordCount">0</span> words</div>
+</header>
+
+<div class="controls">
+    <button class="action" onclick="document.getElementById('fileInput').click()">import</button>
+    <button id="chaosBtn" class="action" onclick="toggleChaos()">chaos: off</button>
+    <button class="action" onclick="exportDoc()">save as</button>
+    <button class="action" style="opacity: 0.3;" onclick="clearCanvas()">clear</button>
+</div>
+
+<div class="style-bar">
+    <button id="boldBtn" class="action bold-btn" onclick="applyStyle('bold')">B</button>
+    <button id="italicBtn" class="action italic-btn" onclick="applyStyle('italic')">I</button>
+    <button id="cursiveBtn" class="action cursive-btn" onclick="applyCursive()">c</button>
+</div>
+
+<input type="file" id="fileInput" accept=".txt" onchange="importDoc(event)">
+<div id="äm-workspace" contenteditable="true" spellcheck="false" inputmode="text"></div>
+<footer>c'est solo de mi</footer>
+
+<script>
+    const canvas = document.getElementById('äm-workspace');
+    const wordCountDisplay = document.getElementById('wordCount');
+    let isChaos = false;
+    let isCursive = false;
+
+    // Register Service Worker for Edge/PWA Install
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(err => console.log(err));
+    }
+
+    window.onload = () => {
+        canvas.innerHTML = localStorage.getItem('am_editor_content') || "";
+        updateStats();
+    };
+
+    function toggleChaos() {
+        isChaos = !isChaos;
+        const btn = document.getElementById('chaosBtn');
+        btn.innerText = `chaos: ${isChaos ? 'on' : 'off'}`;
+        btn.classList.toggle('active');
+        if (!isChaos) document.execCommand('foreColor', false, '#222222');
+        canvas.focus();
+    }
+
+    function applyStyle(cmd) {
+        document.execCommand(cmd, false, null);
+        updateUI();
+        canvas.focus();
+    }
+
+    function applyCursive() {
+        isCursive = !isCursive;
+        const fontName = isCursive ? 'Dancing Script' : 'Montserrat';
+        document.execCommand('fontName', false, fontName);
+        document.getElementById('cursiveBtn').classList.toggle('active');
+        canvas.focus();
+    }
+
+    function getRandomColor() {
+        const hue = Math.floor(Math.random() * 360);
+        return `hsl(${hue}, 95%, 45%)`;
+    }
+
+    canvas.addEventListener('input', (e) => {
+        updateStats();
+        if (isChaos && (e.inputType === "insertText" || e.inputType === "insertCompositionText")) {
+            document.execCommand('foreColor', false, getRandomColor());
         }
+        localStorage.setItem('am_editor_content', canvas.innerHTML);
+    });
+
+    canvas.addEventListener('click', updateUI);
+    canvas.addEventListener('keyup', updateUI);
+
+    function updateUI() {
+        document.getElementById('boldBtn').classList.toggle('active', document.queryCommandState('bold'));
+        document.getElementById('italicBtn').classList.toggle('active', document.queryCommandState('italic'));
+    }
+
+    function updateStats() {
+        const text = canvas.innerText.trim();
+        const words = text ? text.split(/\s+/).length : 0;
+        wordCountDisplay.innerText = words;
+    }
+
+    function importDoc(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            canvas.innerText = e.target.result;
+            updateStats();
+            localStorage.setItem('am_editor_content', canvas.innerHTML);
+        };
+        reader.readAsText(file);
+    }
+
+    function exportDoc() {
+        const content = canvas.innerText;
+        const filename = prompt("export as:", "my_notes.txt");
+        if (!filename) return;
+        const blob = new Blob([content], {type: "text/plain"});
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filename.endsWith('.txt') ? filename : filename + '.txt';
+        link.click();
+    }
+
+    function clearCanvas() { 
+        if (confirm("clear everything?")) {
+            canvas.innerHTML = ""; 
+            updateStats();
+            localStorage.removeItem('am_editor_content');
+            isCursive = false;
+            document.querySelectorAll('.action').forEach(b => b.classList.remove('active'));
+            document.execCommand('foreColor', false, '#222222');
+        }
+    }
+</script>
+</body>
+</html>
         
         .style-bar {
             display: flex; justify-content: center; gap: 35px;
