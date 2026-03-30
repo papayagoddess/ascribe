@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ascribe-v2'; // Changed from v1 to v2
+const CACHE_NAME = 'ascribe-v4';
 const ASSETS = [
   '/ascribe/',
   '/ascribe/index.html',
@@ -6,4 +6,28 @@ const ASSETS = [
   '/ascribe/icon.png'
 ];
 
-// ... (rest of the code stays exactly the same)
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS);
+    })
+  );
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      );
+    })
+  );
+});
+
+self.addEventListener('fetch', (e) => {
+  e.respondWith(
+    caches.match(e.request).then((response) => {
+      return response || fetch(e.request);
+    })
+  );
+});
